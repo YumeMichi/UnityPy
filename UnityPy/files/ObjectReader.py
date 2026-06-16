@@ -48,6 +48,7 @@ class ObjectReader(Generic[T]):
     is_stripped: Optional[int]
     data: Optional[bytes] = None
     _read_until: Optional[int] = None
+    _typetree_padding: Optional[bytes] = None
 
     @property
     def version(self):
@@ -254,6 +255,15 @@ class ObjectReader(Generic[T]):
             byte_size=self.byte_size,
             check_read=check_read,
         )
+        self._read_until = getattr(self.reader, "_read_until", None)
+        self._typetree_padding = None
+        if self._read_until is not None:
+            end_pos = self.byte_start + self.byte_size
+            if self._read_until < end_pos:
+                current_pos = self.Position
+                self.Position = self._read_until
+                self._typetree_padding = self.reader.read_bytes(end_pos - self._read_until)
+                self.Position = current_pos
         if wrap:
             ret.set_object_reader(self)  # type: ignore
         return ret  # type: ignore
@@ -269,6 +279,8 @@ class ObjectReader(Generic[T]):
             writer = EndianBinaryWriter(endian=self.reader.endian)
         TypeTreeHelper.write_typetree(tree, node, writer, self.assets_file)
         data = writer.bytes
+        if self._typetree_padding:
+            data += self._typetree_padding
         self.set_raw_data(data)
         return data
 

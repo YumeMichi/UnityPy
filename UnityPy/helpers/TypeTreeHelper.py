@@ -143,17 +143,27 @@ def read_typetree(
         The parsed typtree
     """
     bytes_read: int
+    pos = reader.Position
     if byte_size and read_typetree_boost:
         data = reader.read_bytes(byte_size)
         obj, bytes_read = read_typetree_boost(data, root_node, reader.endian, as_dict, assetsfile, classes)
     else:
-        pos = reader.Position
         config = TypeTreeConfig(as_dict, assetsfile, False)
         obj = read_value(root_node, reader, config)
         bytes_read = reader.Position - pos
 
+    setattr(reader, "_read_until", pos + bytes_read)
+
     if check_read and bytes_read != byte_size:
-        raise ValueError(f"Expected to read {byte_size} bytes, but only read {bytes_read} bytes")
+        if byte_size is None or bytes_read > byte_size:
+            raise ValueError(f"Expected to read {byte_size} bytes, but only read {bytes_read} bytes")
+
+        current_pos = reader.Position
+        remaining = byte_size - bytes_read
+        tail = reader.read_bytes(remaining)
+        reader.Position = current_pos
+        if any(tail):
+            raise ValueError(f"Expected to read {byte_size} bytes, but only read {bytes_read} bytes")
 
     return obj
 
